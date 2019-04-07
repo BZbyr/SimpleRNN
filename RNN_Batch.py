@@ -7,7 +7,7 @@ Please make some changes instead of submitting the original code.
 If you have some questions about the code or data,
 please contact Y.Q. Deng(yqdeng@cs.hku.hk) or M.M. Kuang(kuangmeng@hku.hk)
 """
-
+#π%
 import timeit as time
 import numpy as np
 import tensorflow as tf
@@ -110,6 +110,12 @@ sess.run(tf.global_variables_initializer())
 num4train = 4000
 num4test = 1000
 epoch = 10
+
+size = 10
+m = 0
+a_batch_list = []
+b_batch_list = []
+c_batch_list = []
 # train
 for i in range(epoch):
     index = [i for i in range(len(a_list0))]
@@ -121,18 +127,28 @@ for i in range(epoch):
         a_list.append(a_list0[index[n]])
         b_list.append(b_list0[index[n]])
         c_list.append(c_list0[index[n]])
-    for j in range(num4train): #batch_size=1
-        a = np.array(a_list[j], dtype=np.uint8) #changed
-        b = np.array(b_list[j], dtype=np.uint8) #changed
-        c = np.array(c_list[j], dtype=np.uint8) #changed
-        ab = np.c_[a,b]
-        x = np.array(ab).reshape([1, binary_dim, 2])
-        y = np.array(c).reshape([1, binary_dim])
-        sess.run(train_step, {X: x, Y: y})  #输入 x 格式化成 tf 中 X 的格式，输入然后根据 loss
+    for j in range(num4train):
+        if(m < size):
+             a_batch_list.append(a_list[j])
+             b_batch_list.append(b_list[j])
+             c_batch_list.append(c_list[j])
+             m = m+1
+             print(m)
+        
+        if(m == size):
+            a = np.array(a_batch_list, dtype=np.uint8) #changed
+            b = np.array(b_batch_list, dtype=np.uint8) #changed
+            c = np.array(c_batch_list, dtype=np.uint8) #changed
+            ab = np.c_[a,b]
+            x = np.array(ab).reshape([size, binary_dim, 2])
+            y = np.array(c).reshape([size, binary_dim])
+            sess.run(train_step, {X: x, Y: y})  #输入 x 格式化成 tf 中 X 的格式，输入然后根据 loss
+            m = 0
 
 remain_result = []
 
 #Test
+print("test")
 for i in range(num4train + 1, num4train + num4test):
     a = np.array(a_list[i], dtype=np.uint8) #changed
     b = np.array(b_list[i], dtype=np.uint8) #changed
@@ -152,12 +168,12 @@ for i in range(num4train + 1, num4train + num4test):
     error = np.sum(np.absolute(y - probs))
 
     #print the prediction, the right y and the error.
-    print("---------------")
-    print(prediction)
-    print(y[0])
-    print(error)
-    print("---------------")
-    print()
+    #print("---------------")
+    #print(prediction)
+    #print(y[0])
+    #print(error)
+    #print("---------------")
+    #print()
 
 sess.close()
 
