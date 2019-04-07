@@ -1,30 +1,71 @@
-# SimpleRNN
-COMP7606 deep learning assignment 1
 
-05 Adam罪状二：可能错过全局最优解
+## 1. Nan Value Trap in Loss Function Computation
 
-深度神经网络往往包含大量的参数，在这样一个维度极高的空间内，非凸的目标函数往往起起伏伏，拥有无数个高地和洼地。有的是高峰，通过引入动量可能很容易越过；但有些是高原，可能探索很多次都出不来，于是停止了训练。
+The first time I ran the code, I found a lot of nan values. By analyzing the code, I found that the loss function uses cross entropy and needs to calculate the logarithm. And there is zero input in the data set. However, we can't calculate the logarithm of zero.
+```
+loss = tf.reduce_sum(-Y_ * tf.log(h_) - (1-Y_) * tf.log(1-h_), name='loss')
+```
+This is actually a horrible way of computing the cross-entropy. In some samples, `h_` and `1-h_` may be `0`. That's normally not a problem since you're not interested in those, but in the way cross_entropy is written there, it yields 0*log(0) for that particular sample. Hence the NaN. Replacing it with
+```
+loss = tf.reduce_sum(-Y_ * tf.log(h_+1e-8) - (1-Y_) * tf.log(1-h_+1e-8), name='loss')
+```
+In this way, the minimum value of `h_` and `1-h_` is replaced by a minimum value `1e-8` so that there will be no Nan value.
 
-之前，Arxiv上的两篇文章谈到这个问题。
+## 2. Shuffle Dataset in every epoch
 
-第一篇就是前文提到的吐槽Adam最狠的UC Berkeley的文章《The Marginal Value of Adaptive Gradient Methods in Machine Learning》。文中说到，同样的一个优化问题，不同的优化算法可能会找到不同的答案，但自适应学习率的算法往往找到非常差的答案（very poor solution）。他们设计了一个特定的数据例子，自适应学习率算法可能会对前期出现的特征过拟合，后期才出现的特征很难纠正前期的拟合效果。但这个文章给的例子很极端，在实际情况中未必会出现。
+It's very important to shuffle training data before every epoch. This makes sure your neural network is not remembering a specific order. If the order of data within each epoch is the same, then the model may use this as a way of reducing the training error, which is a sort of overfitting.
 
-另外一篇是《Improving Generalization Performance by Switching from Adam to SGD》，进行了实验验证。他们CIFAR-10数据集上进行测试，Adam的收敛速度比SGD要快，但最终收敛的结果并没有SGD好。他们进一步实验发现，主要是后期Adam的学习率太低，影响了有效的收敛。他们试着对Adam的学习率的下界进行控制，发现效果好了很多。
+It increases the randomness and improves the generalization performance of the network. And it avoids the extreme gradient when the weight is updated due to the regular data, and avoids the over-fitting or under-fitting of the final model. 
+Usually, we use stochastic gradient descent (and improvements thereon), which means that they rely on the randomness to find a minimum. Shuffling training data makes the gradients more variable, which can help convergence because it increases the likelihood of hitting a good direction.
 
-于是他们提出了一个用来改进Adam的方法：前期用Adam，享受Adam快速收敛的优势；后期切换到SGD，慢慢寻找最优解。这一方法以前也被研究者们用到，不过主要是根据经验来选择切换的时机和切换后的学习率。这篇文章把这一切换过程傻瓜化，给出了切换SGD的时机选择方法，以及学习率的计算方法，效果看起来也不错。
+```python
+num4train = 4000
+num4test = 1000
+epoch = 10
+# train
+for i in range(epoch):
+    #shuffle
+    index = [i for i in range(len(a_list0))]
+    np.random.shuffle(index)
+    a_list.clear()
+    b_list.clear()
+    c_list.clear()
+    for n in range(len(a_list0)):
+        a_list.append(a_list0[index[n]])
+        b_list.append(b_list0[index[n]])
+        c_list.append(c_list0[index[n]])
+    #train
+    for j in range(num4train): #batch_size=1
+        a = np.array(a_list[j], dtype=np.uint8)
+        b = np.array(b_list[j], dtype=np.uint8)
+        c = np.array(c_list[j], dtype=np.uint8)
+        ab = np.c_[a,b]
+        x = np.array(ab).reshape([1, binary_dim, 2])
+        y = np.array(c).reshape([1, binary_dim])
+        sess.run(train_step, {X: x, Y: y})  
+```
+## 3. SGD vs Adam
 
-这个算法挺有趣，下一篇我们可以来谈谈，这里先贴个算法框架图：
+Because the dataset is small, I don't want to use very complex algorithms. And **Adam** may not converge in some cases, or may miss the global optimal solution. Another article, "[***Improving Generalization Performance by Switching from Adam to SGD***](https://arxiv.org/abs/1712.07628)", has been experimentally validated. They tested on the CIFAR-10 dataset. **Adam** converged faster than **SGD**, but the final convergence result was not as good as **SGD**.
 
-06 到底该用Adam还是SGD？
+## 4. learning rate decay
 
-所以，谈到现在，到底Adam好还是SGD好？这可能是很难一句话说清楚的事情。去看学术会议中的各种paper，用SGD的很多，Adam的也不少，还有很多偏爱AdaGrad或者AdaDelta。可能研究员把每个算法都试了一遍，哪个出来的效果好就用哪个了。毕竟paper的重点是突出自己某方面的贡献，其他方面当然是无所不用其极，怎么能输在细节上呢？
+In the Fensorflow, `tf.train.GradientDescentOptimizer` is designed to use a constant learning rate for all variables in all steps. 
 
-而从这几篇怒怼Adam的paper来看，多数都构造了一些比较极端的例子来演示了Adam失效的可能性。这些例子一般过于极端，实际情况中可能未必会这样，但这提醒了我们，理解数据对于设计算法的必要性。优化算法的演变历史，都是基于对数据的某种假设而进行的优化，那么某种算法是否有效，就要看你的数据是否符合该算法的胃口了。
+When training the model, this situation is usually encountered: the loss of the training set is not reduced after it has dropped to a certain extent. For example, training loss has been fluctuating back and forth between 0.7 and 0.9 and cannot be further reduced. This can usually be achieved by appropriately reducing the learning rate.
 
-算法固然美好，数据才是根本。
+``` python 
+initial_learning_rate = 0.01
 
-另一方面，Adam之流虽然说已经简化了调参，但是并没有一劳永逸地解决问题，默认的参数虽然好，但也不是放之四海而皆准。因此，在充分理解数据的基础上，依然需要根据数据特性、算法特性进行充分的调参实验。
+learning_rate = tf.train.exponential_decay(initial_learning_rate,global_step=global_step,decay_steps=10,decay_rate=0.8)
 
-少年，好好炼丹吧。
+train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss) 
+```
 
+## 5. LSTM
 
+In the RNN, gradient disappearance or gradient explosion problems may occur, as well as long-distance dependence problems, and LSTM solves these problems well. And the data set is 8bit data, 1 may appear in any of the 8 bits.
+
+``` python
+cell = tf.nn.rnn_cell.LSTMCell(hidden_dim)
+```

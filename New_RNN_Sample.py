@@ -39,13 +39,6 @@ a_list0 = str_2_list(a_list0)
 b_list0 = str_2_list(b_list0)
 c_list0 = str_2_list(c_list0)
 
-""" index = [i for i in range(len(a_list0))]
-np.random.shuffle(index)
-for n in range(len(a_list0)):
-    a_list.append(a_list0[index[n]])
-    b_list.append(b_list0[index[n]])
-    c_list.append(c_list0[index[n]]) """
-
 print("-------")
 print("finish dataset")
 
@@ -89,16 +82,14 @@ h_ = tf.reshape(h, [time_steps])
 Y_ = tf.reshape(Y, [time_steps])
 
 #loss function、交叉熵
-loss = tf.reduce_sum(-Y_ * tf.log(h_+0.00000001) - (1-Y_) * tf.log(1-h_+0.0000001), name='loss')
+loss = tf.reduce_sum(-Y_ * tf.log(h_+1e-8) - (1-Y_) * tf.log(1-h_+1e-8), name='loss')
 
 global_step = tf.Variable(0, trainable=False)
 
 initial_learning_rate = 0.01 #初始学习率
 
-
 learning_rate = tf.train.exponential_decay(initial_learning_rate,global_step=global_step,decay_steps=10,decay_rate=0.8)
 
-print("GOptimizer")
 train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss)                         
 #train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
 # Launch the graph
@@ -112,6 +103,7 @@ num4test = 1000
 epoch = 10
 # train
 for i in range(epoch):
+    #shuffle
     index = [i for i in range(len(a_list0))]
     np.random.shuffle(index)
     a_list.clear()
@@ -121,6 +113,7 @@ for i in range(epoch):
         a_list.append(a_list0[index[n]])
         b_list.append(b_list0[index[n]])
         c_list.append(c_list0[index[n]])
+    #train
     for j in range(num4train): #batch_size=1
         a = np.array(a_list[j], dtype=np.uint8) #changed
         b = np.array(b_list[j], dtype=np.uint8) #changed
@@ -128,7 +121,7 @@ for i in range(epoch):
         ab = np.c_[a,b]
         x = np.array(ab).reshape([1, binary_dim, 2])
         y = np.array(c).reshape([1, binary_dim])
-        sess.run(train_step, {X: x, Y: y})  #输入 x 格式化成 tf 中 X 的格式，输入然后根据 loss
+        sess.run(train_step, {X: x, Y: y})
 
 remain_result = []
 
@@ -152,12 +145,13 @@ for i in range(num4train + 1, num4train + num4test):
     error = np.sum(np.absolute(y - probs))
 
     #print the prediction, the right y and the error.
-    print("---------------")
-    print(prediction)
-    print(y[0])
-    print(error)
-    print("---------------")
-    print()
+    
+    #print("---------------")
+    #print(prediction)
+    #print(y[0])
+    #print(error)
+    #print("---------------")
+    #print()
 
 sess.close()
 
